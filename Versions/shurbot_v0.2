@@ -1,0 +1,253 @@
+#include <IRremote.h>
+#include <IRremoteInt.h>
+
+
+const int potenciometro=0;//Selector del modo
+const int ledLinea=2; //led que corresponde al modo seguidor de linea
+const int ledControl=3; //led correspondiente al modo por radio control
+const int ledAutomatico=4; //led que corresponde al modo automatico
+const int boton=5; //Boton para confirmar el modo
+const int trigPin=7; //conexion del HC-SR04 
+const int echoPin=8; //conexion del HC-SR04 
+const int buzzer=12; //No es seguro que utilize el buzzer en la version final
+const int RECV_PIN=13; //Sensor TL 1838
+
+int modo=0; //Modo 0=apagado, Modo 1=Automatico, Modo 2=Radio Control, Modo 3=Seguidor Linea 
+int valorPotenciometro=0; //valor que leeremos del potenciometro
+int valorBoton; //Valor del boton
+int i, pausa, buzzerState=LOW; //valores auxiliares
+long duracion, distancia, previousMillis = 0; ; //valores que se utilizan en metodos
+IRrecv irrecv(RECV_PIN); 
+decode_results results;
+
+void setup()
+{
+  pinMode(ledAutomatico,OUTPUT);
+  pinMode(ledControl,OUTPUT);
+  pinMode(ledLinea,OUTPUT);
+  pinMode(boton,INPUT);
+  pinMode(trigPin,OUTPUT);
+  pinMode(echoPin,INPUT);
+  pinMode(buzzer,OUTPUT);
+  irrecv.enableIRIn(); //Iniciación del receptor infrarrojo
+  Serial.begin(9600);
+} 
+
+void loop()
+{
+  eligeModo();
+  switch(modo){
+     case 0:eligeModo();
+     case 1:   
+        for(i=0;i!=1;){ //el modo se ejecuta hasta que se pulsa de nuevo el boton
+          valorBoton=digitalRead(boton);
+          modoAutomatico(); 
+          if(valorBoton==HIGH){
+            i=1; 
+    } }
+           break;
+     case 2: 
+         for(i=0;i!=1;){ //el modo se ejecuta hasta que se pulsa de nuevo el boton
+           valorBoton=digitalRead(boton);
+           modoRadioControl(); 
+           if(valorBoton==HIGH){
+             i=1; 
+     } }   
+            break;
+     case 3:
+           //modoSeguidorLinea();
+           break;    
+  }
+}
+
+
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////METODOS PRINCIPALES/////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+int eligeModo(){ //Los leds se van encendiendo segun el valor del potenciometro   
+  for(i=0;i!=1;){//Al pulsar el botón se confirma el modo elegido
+    valorPotenciometro=analogRead(potenciometro); 
+    enciendeLeds(valorPotenciometro);
+    valorBoton=digitalRead(boton);
+    if(valorBoton==HIGH){
+      modo=leeModo(valorPotenciometro); //Cuando se pulsa el botón los leds parpadearán para        
+      apagaLeds(0); //señalar que ha sido confirmado el modo
+      delay(200);
+      enciendeLeds(0);
+      delay(200);
+      apagaLeds(0); 
+      delay(200);
+      enciendeLeds(0);
+      delay(200);
+      apagaLeds(0);     
+      delay(200);
+      enciendeLeds(0);
+      delay(200);
+      apagaLeds(0);
+      i=1;
+ }  
+}
+  return 0;
+}
+
+int leeModo(int valorPotenciometro){//Asigna un modo dependiendo del valor del potenciometro 
+  if(0<=valorPotenciometro&&valorPotenciometro<40){
+    modo=0; //Apagado
+  }else if(40<=valorPotenciometro&&valorPotenciometro<381){
+    modo=1; //Automatico
+  }else if(381<=valorPotenciometro&&valorPotenciometro<722){
+    modo=2; //Radio Control
+  }else if(722<=valorPotenciometro&&valorPotenciometro<1023){
+    modo=3; //Seguidor de Linea
+  }
+  return modo;
+}
+
+
+int modoAutomatico(){ //Haciendo uso del HC-SR04 el buzzer emite un pitido con una 
+  unsigned long currentMillis = millis(); //pausa que depende de la distancia del sensor al obstaculo
+  calculaDistancia();
+  if(distancia<100){
+    pausa=distancia*10;    
+   if(currentMillis - previousMillis > pausa) {
+    previousMillis = currentMillis;   
+
+    if (buzzerState == LOW)
+      buzzerState = HIGH;
+    else
+      buzzerState = LOW;
+
+    digitalWrite(buzzer, buzzerState);
+  }
+  }
+  return 0;
+}
+
+int modoRadioControl(){ //Usando un mando de control remoto por infrarrojos se encenderán los leds
+  if (irrecv.decode(&results)) //los valores utilizados son únicos para el mando que uso
+    {    
+     Serial.println(results.value, HEX);
+     irrecv.resume(); 
+     enciendeLed();
+    }
+    delay(100);  
+  return 0;  
+}
+
+
+
+
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////METODOS AUXILIARES/////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void enciendeLeds(int valorPotenciometro){ //Enciende los leds dependiendo del valor del potenciometro
+   if(0<=valorPotenciometro&&valorPotenciometro<40){
+    digitalWrite(ledAutomatico,LOW);
+    digitalWrite(ledControl,LOW);
+    digitalWrite(ledLinea,LOW);
+  }else if(40<=valorPotenciometro&&valorPotenciometro<381){
+    digitalWrite(ledAutomatico,HIGH);
+    digitalWrite(ledControl,LOW);
+    digitalWrite(ledLinea,LOW);
+  }else if(381<=valorPotenciometro&&valorPotenciometro<722){
+    digitalWrite(ledAutomatico,LOW);
+    digitalWrite(ledControl,HIGH);
+    digitalWrite(ledLinea,LOW);
+  }else if(722<=valorPotenciometro&&valorPotenciometro<1023){
+    digitalWrite(ledAutomatico,LOW);
+    digitalWrite(ledControl,LOW);
+    digitalWrite(ledLinea,HIGH);
+  }
+}
+
+
+void calculaDistancia(){ //Calcula la distancia usando el HC-SR04
+  digitalWrite(trigPin, LOW);
+  delayMicroseconds(2);
+  digitalWrite(trigPin, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(trigPin, LOW);
+  duracion = pulseIn(echoPin, HIGH);
+
+  distancia = microsecondsToCentimeters(duracion);
+}
+
+long microsecondsToCentimeters(long microseconds)
+{
+  return microseconds / 29 / 2;
+}
+
+
+
+
+void enciendeLed(){ //Enciende los leds dependiendo del botón que se pulse
+  int valor= results.value;
+  switch(valor){
+  
+  case 0xE44D4496: //derecha
+        enciendeLeds(800);
+        break;
+  case 0x4B1F409E: //izquierda
+        enciendeLeds(50);
+        break;
+   case 0x4C39D7EE: //abajo
+        enciendeLeds(500);
+        break;
+  case 0x81E3AFE6: //arriba
+        enciendeLeds(500);
+        break;      
+  case 0x7A3AF73E: //arriba
+        enciendeLeds(500);
+        break;  
+  case 0x4AD435D9: //Left
+       enciendeLeds(50);
+        break;      
+  case 0x5D20D651: //Right
+        enciendeLeds(800);
+        break; 
+  case 0x19F71C8E: //arriba y derecha
+        enciendeLeds(800);
+        break;
+  case 0x80C91896: //arriba e izquierda
+        enciendeLeds(50);
+        break;      
+  }  
+}
+
+void apagaLeds(int valor){ //Apaga todos los leds o sólo uno en concreto
+ switch (valor){  
+  case 0:
+    digitalWrite(ledAutomatico,LOW);
+    digitalWrite(ledControl,LOW);
+    digitalWrite(ledLinea,LOW);
+    break;
+  case 1:
+  //digitalWrite(ledAutomatico,LOW);
+    digitalWrite(ledControl,LOW);
+    digitalWrite(ledLinea,LOW);
+    break;  
+  case 2:
+    digitalWrite(ledAutomatico,LOW);
+  //digitalWrite(ledControl,LOW);
+    digitalWrite(ledLinea,LOW);
+    break; 
+  case 3:
+    digitalWrite(ledAutomatico,LOW);
+    digitalWrite(ledControl,LOW);
+  //digitalWrite(ledLinea,LOW);
+    break;     
+} 
+}
+
+void enciendeLeds(){
+  digitalWrite(ledAutomatico,HIGH);
+  digitalWrite(ledControl,HIGH);
+  digitalWrite(ledLinea,HIGH);
+} 
+
